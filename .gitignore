@@ -1,0 +1,15 @@
+node_modules/
+dist/
+bin/
+*.log
+logs/
+
+config.yaml
+config.local.yaml
+.env
+.env.*
+!.env.example
+
+.DS_Store
+.idea/
+.vscode/

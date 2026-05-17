@@ -1,0 +1,35 @@
+# 最小配置：只有 proxyToken 和 accounts 是必填，其余全部带默认值。
+# 各字段默认值见 src/config.ts。
+
+server:
+  proxyToken: "sk-local-change-me"   # 客户端 Bearer 用此 token
+
+accounts:
+  - name: "kimi-A"
+    apiKey: "sk-xxxxxxxxA"
+  - name: "kimi-B"
+    apiKey: "sk-xxxxxxxxB"
+    proxy: "http://127.0.0.1:7890"   # 可选，账号独立出站代理
+
+# ── 以下都可选，默认值已能直接用 ────────────────────────────────
+# server:
+#   host: "0.0.0.0"
+#   port: 8787
+#   affinityHeader: "x-session-id"
+#   policy: "affinity-first"          # affinity-first | least-used | round-robin
+#   logLevel: "info"
+#   logFile: "./logs/kimi-proxy.log"  # 开启文件日志；按大小滚动 + 自动清理
+#   logFileMaxSize: "50M"
+#   logFileMaxFiles: 10
+#
+# upstream:
+#   baseUrl: "https://api.kimi.com/coding"
+#   quotaPath: "/v1/usages"
+#   pollIntervalMs: 30000
+#   requestTimeoutMs: 600000
+#   # 失败冷却：避免账号 429 后立刻被 poller 重新标 healthy 又派单
+#   cooldownAfter5xxMs: 10000              # 5xx 上游故障
+#   cooldownAfterNetworkErrorMs: 5000      # 连接/DNS/代理错误
+#   cooldownAfter429MinMs: 60000           # 429 但余量充足：视为瞬时突发
+#   cooldownAfter429MaxMs: 3600000         # 429 且 tier 接近爆掉：冷却到 resetsAt，但封顶 1h
+#   cooldownTierExhaustionThreshold: 95    # tier 利用率超此值视为接近爆掉

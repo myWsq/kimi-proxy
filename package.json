@@ -1,0 +1,29 @@
+{
+  "name": "kimi-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Kimi For Coding 多账号反向代理：余量查询 + 会话亲和 + 负载均衡 + 每账号独立 HTTP 代理",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "fastify": "^5.2.0",
+    "pino": "^9.5.0",
+    "pino-pretty": "^13.0.0",
+    "pino-roll": "^4.0.0",
+    "undici": "^7.2.0",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
