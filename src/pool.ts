@@ -1,6 +1,6 @@
 import { Agent, ProxyAgent, type Dispatcher } from "undici";
 import type { AccountConfig } from "./config.js";
-import type { AccountSnapshot, CredentialStatus, QuotaTier } from "./types.js";
+import type { AccountSnapshot, CredentialStatus, QuotaTier, TotalQuota } from "./types.js";
 
 export interface CooldownConfig {
   cooldownAfter5xxMs: number;
@@ -27,6 +27,8 @@ export class Account {
   totalErrors = 0;
   /** 冷却到期时间（毫秒 epoch），0 表示无冷却 */
   cooldownUntil = 0;
+  /** 终身配额（从 /v1/usages 的 totalQuota 字段解析），null 表示上游未返回 */
+  totalQuota: TotalQuota | null = null;
 
   constructor(cfg: AccountConfig) {
     this.name = cfg.name;
@@ -133,6 +135,7 @@ export class Account {
       totalErrors: this.totalErrors,
       cooldownUntil: this.cooldownUntil > 0 ? new Date(this.cooldownUntil).toISOString() : null,
       cooldownRemainingMs: remaining,
+      totalQuota: this.totalQuota,
     };
   }
 

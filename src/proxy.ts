@@ -29,7 +29,8 @@ const STRIP_REQUEST_HEADERS = new Set([
   "x-forwarded-host",
 ]);
 
-// 不该回写到客户端的响应头
+// 不该回写到客户端的响应头（hop-by-hop）。content-encoding 是 end-to-end，
+// 我们对上游强制 identity 编码所以不会出现这个 header，不需要剥
 const STRIP_RESPONSE_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -40,7 +41,6 @@ const STRIP_RESPONSE_HEADERS = new Set([
   "transfer-encoding",
   "upgrade",
   "content-length",
-  "content-encoding",
 ]);
 
 type AttemptOutcome =
@@ -187,6 +187,9 @@ function buildUpstreamHeaders(
     out[k] = Array.isArray(v) ? v.join(", ") : String(v);
   }
   out["authorization"] = `Bearer ${apiKey}`;
+  // 强制 identity：我们需要扫 SSE/JSON 文本里的 usage 字段，
+  // 拿到压缩字节就没法解析了；undici request() 默认不自动解压
+  out["accept-encoding"] = "identity";
   return out;
 }
 

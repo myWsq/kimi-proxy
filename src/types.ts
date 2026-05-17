@@ -11,6 +11,13 @@ export interface QuotaTier {
   resetsAt: string | null;
 }
 
+/** 终身配额（账号注册以来的累计），对应 /v1/usages 的 totalQuota 字段。 */
+export interface TotalQuota {
+  limit: number;
+  remaining: number;
+  used: number;
+}
+
 export interface AccountSnapshot {
   name: string;
   hasProxy: boolean;
@@ -27,4 +34,6 @@ export interface AccountSnapshot {
   cooldownUntil: string | null;
   /** 冷却剩余毫秒（便于客户端直接显示） */
   cooldownRemainingMs: number;
+  /** 终身配额；上游未返回时为 null */
+  totalQuota: TotalQuota | null;
 }

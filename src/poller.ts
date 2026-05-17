@@ -1,7 +1,7 @@
 import { request } from "undici";
 import type { Logger } from "pino";
 import type { Account, AccountPool } from "./pool.js";
-import type { QuotaTier } from "./types.js";
+import type { QuotaTier, TotalQuota } from "./types.js";
 
 export interface PollerOptions {
   baseUrl: string;
@@ -15,9 +15,15 @@ export interface PollerOptions {
  *   limits[].detail.{limit, remaining, resetTime}  → 5 小时窗口
  *   usage.{limit, remaining, resetTime}            → 周/总限额
  */
-function parseUsages(body: unknown): QuotaTier[] {
+interface ParsedUsages {
+  tiers: QuotaTier[];
+  totalQuota: TotalQuota | null;
+}
+
+function parseUsages(body: unknown): ParsedUsages {
   const tiers: QuotaTier[] = [];
-  if (!body || typeof body !== "object") return tiers;
+  let totalQuota: TotalQuota | null = null;
+  if (!body || typeof body !== "object") return { tiers, totalQuota };
   const obj = body as Record<string, unknown>;
 
   const limits = obj.limits;
@@ -60,7 +66,17 @@ function parseUsages(body: unknown): QuotaTier[] {
     });
   }
 
-  return tiers;
+  const tq = obj.totalQuota;
+  if (tq && typeof tq === "object") {
+    const t = tq as Record<string, unknown>;
+    const limit = toNumber(t.limit);
+    const remaining = toNumber(t.remaining);
+    if (limit !== null && remaining !== null) {
+      totalQuota = { limit, remaining, used: Math.max(limit - remaining, 0) };
+    }
+  }
+
+  return { tiers, totalQuota };
 }
 
 function toNumber(v: unknown): number | null {
@@ -157,13 +173,14 @@ export class QuotaPoller {
       }
 
       const json = await res.body.json();
-      const tiers = parseUsages(json);
+      const { tiers, totalQuota } = parseUsages(json);
       acc.tiers = tiers;
+      acc.totalQuota = totalQuota;
       acc.healthy = true;
       acc.credentialStatus = "valid";
       acc.lastError = null;
       acc.lastSuccessAt = Date.now();
-      log.debug({ tiers }, "quota refreshed");
+      log.debug({ tiers, totalQuota }, "quota refreshed");
     } catch (err) {
       acc.healthy = false;
       acc.lastError = (err as Error).message;
