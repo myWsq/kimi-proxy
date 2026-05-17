@@ -24,20 +24,22 @@ const configSchema = z.object({
     // 保留多少个滚动文件（含当前）
     logFileMaxFiles: z.number().int().min(1).default(10),
   }),
-  upstream: z.object({
-    baseUrl: z.string().url().default("https://api.kimi.com/coding"),
-    quotaPath: z.string().default("/v1/usages"),
-    pollIntervalMs: z.number().int().min(1000).default(30_000),
-    requestTimeoutMs: z.number().int().min(1000).default(600_000),
-    // 失败后冷却时长：避免 poller 30s 把它判回 healthy 后立即又被命中
-    cooldownAfter5xxMs: z.number().int().min(0).default(10_000),
-    cooldownAfterNetworkErrorMs: z.number().int().min(0).default(5_000),
-    // 429 时：余量充足走 min（瞬时突发），某 tier 接近爆掉则等到 resetsAt（受 max 封顶）
-    cooldownAfter429MinMs: z.number().int().min(0).default(60_000),
-    cooldownAfter429MaxMs: z.number().int().min(0).default(3_600_000), // 1h
-    // 当某 tier utilization 超过此阈值视为「接近爆掉」，冷却到 resetsAt
-    cooldownTierExhaustionThreshold: z.number().min(0).max(100).default(95),
-  }),
+  upstream: z
+    .object({
+      baseUrl: z.string().url().default("https://api.kimi.com/coding"),
+      quotaPath: z.string().default("/v1/usages"),
+      pollIntervalMs: z.number().int().min(1000).default(30_000),
+      requestTimeoutMs: z.number().int().min(1000).default(600_000),
+      // 失败后冷却时长：避免 poller 30s 把它判回 healthy 后立即又被命中
+      cooldownAfter5xxMs: z.number().int().min(0).default(10_000),
+      cooldownAfterNetworkErrorMs: z.number().int().min(0).default(5_000),
+      // 429 时：余量充足走 min（瞬时突发），某 tier 接近爆掉则等到 resetsAt（受 max 封顶）
+      cooldownAfter429MinMs: z.number().int().min(0).default(60_000),
+      cooldownAfter429MaxMs: z.number().int().min(0).default(3_600_000), // 1h
+      // 当某 tier utilization 超过此阈值视为「接近爆掉」，冷却到 resetsAt
+      cooldownTierExhaustionThreshold: z.number().min(0).max(100).default(95),
+    })
+    .default({}),
   accounts: z.array(accountSchema).min(1),
 });
 
