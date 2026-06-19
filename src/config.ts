@@ -10,6 +10,10 @@ const accountSchema = z.object({
   proxy: z.string().url().optional(),
   // 引用代码注册表里的 provider id;省略则默认归 DEFAULT_PROVIDER_ID(向后兼容)
   provider: z.string().min(1).optional(),
+  // 管理类 OpenAPI 的账号级 AK/SK(如方舟用量查询的 V4 签名),与 apiKey 不同。
+  // 仅需要查 usage 的 provider(如 ark)才配;不配则该账号按无 quota 处理。
+  accessKey: z.string().min(1).optional(),
+  secretKey: z.string().min(1).optional(),
 });
 
 // provider 的部署配置。model 必填(本服务固定下发的 model,无代码默认值);

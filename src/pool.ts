@@ -16,6 +16,9 @@ export class Account {
   readonly apiKey: string;
   readonly proxyUrl: string | undefined;
   readonly dispatcher: Dispatcher;
+  /** 管理类 OpenAPI 的账号级凭证(如方舟用量查询的 V4 签名),与 apiKey 不同。 */
+  readonly accessKey: string | undefined;
+  readonly secretKey: string | undefined;
   /** 此账号所属 provider 定义(解析策略、默认地址)。 */
   readonly provider: ProviderDef;
   /** 生效上游地址:provider 默认 baseUrl,被 config providers 覆盖后的结果。 */
@@ -44,6 +47,8 @@ export class Account {
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.model = model;
+    this.accessKey = cfg.accessKey;
+    this.secretKey = cfg.secretKey;
     this.dispatcher = cfg.proxy
       ? new ProxyAgent({
           uri: cfg.proxy,

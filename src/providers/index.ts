@@ -1,3 +1,4 @@
+import { ark } from "./ark.js";
 import { glm } from "./glm.js";
 import { kimi } from "./kimi.js";
 import type { ProviderDef } from "./types.js";
@@ -8,6 +9,7 @@ export type { ProviderDef, ParsedUsages } from "./types.js";
 export const PROVIDERS: Record<string, ProviderDef> = {
   [kimi.id]: kimi,
   [glm.id]: glm,
+  [ark.id]: ark,
 };
 
 /** 默认 provider:不带 provider 字段的 account 归入此项(向后兼容旧 config)。 */

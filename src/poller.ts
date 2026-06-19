@@ -58,6 +58,39 @@ export class QuotaPoller {
       return;
     }
 
+    // 自定义抓取(如方舟 V4 签名)：provider 自己请求+鉴权+解析。
+    // 注意:用量查询与转发用的是不同凭证(AK/SK vs 推理 key),所以查询失败
+    // 不应把账号摘掉——保持可选,只记录错误、不更新 tiers。
+    if (quota.fetch) {
+      acc.lastFetchedAt = Date.now();
+      try {
+        const parsed = await quota.fetch(acc);
+        if (!parsed) {
+          // 未配置凭证：按无 quota 处理
+          acc.healthy = true;
+          return;
+        }
+        acc.tiers = parsed.tiers;
+        acc.totalQuota = parsed.totalQuota;
+        acc.healthy = true;
+        acc.lastSuccessAt = Date.now();
+        log.debug({ tiers: parsed.tiers }, "quota refreshed (custom)");
+      } catch (err) {
+        acc.healthy = true; // 用量查询失败不影响转发可用性
+        acc.lastError = `usage query: ${(err as Error).message}`;
+        log.warn({ err }, "custom quota fetch error");
+      }
+      return;
+    }
+
+    // 简单模式缺字段(理论不会发生):按无 quota 处理
+    if (!quota.path || !quota.parse) {
+      acc.healthy = true;
+      acc.lastFetchedAt = Date.now();
+      return;
+    }
+    const parseUsage = quota.parse;
+
     const url = acc.baseUrl.replace(/\/$/, "") + quota.path;
     acc.lastFetchedAt = Date.now();
     try {
@@ -90,7 +123,7 @@ export class QuotaPoller {
       }
 
       const json = await res.body.json();
-      const { tiers, totalQuota } = quota.parse(json);
+      const { tiers, totalQuota } = parseUsage(json);
       acc.tiers = tiers;
       acc.totalQuota = totalQuota;
       acc.healthy = true;

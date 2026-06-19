@@ -60,6 +60,7 @@ claude
 |---|---|
 | `kimi` | Kimi For Coding，含 `/v1/usages` 余量解析（5 小时窗口 + 周限额 + 终身配额） |
 | `glm` | 智谱 GLM（Anthropic 兼容），暂无 usage 接口：账号默认可用，仅靠运行时 429/5xx 冷却 |
+| `ark` | 火山引擎方舟 Coding Plan（Anthropic 兼容，`/api/coding`）。配账号级 AK/SK 后可查实时用量（session/weekly/monthly），否则仅靠运行时冷却 |
 
 每个 provider 在配置里固定一个 **model**（见下「固定 model」）。
 

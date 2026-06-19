@@ -13,6 +13,8 @@ providers:
   glm:
     model: "glm-4.6"
     # baseUrl: "https://my-gateway/anthropic"   # 可选，覆盖代码默认地址
+  ark:
+    model: "ark-code-latest"                     # 方舟 Coding Plan；也可填 doubao-seed-code-preview-latest 等
 
 accounts:
   - name: "kimi-A"
@@ -24,6 +26,12 @@ accounts:
   - name: "glm-A"
     provider: "glm"                  # 引用 src/providers/ 注册表里的 id
     apiKey: "zp-xxxxxxxx"
+  - name: "ark-A"
+    provider: "ark"
+    apiKey: "ark-xxxxxxxx"
+    # 可选：配账号级 AK/SK（控制台 IAM 密钥管理获取）后，可查方舟实时用量 tiers
+    # accessKey: "AKLT..."
+    # secretKey: "..."
 
 # ── Provider ────────────────────────────────────────────────────
 # provider 的上游地址、配额解析逻辑定义在代码里（src/providers/），model 在上面配置。
