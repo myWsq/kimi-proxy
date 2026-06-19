@@ -1,7 +1,39 @@
 import { Agent, ProxyAgent, type Dispatcher } from "undici";
+import { socksDispatcher } from "fetch-socks";
 import type { AccountConfig, ProviderConfig } from "./config.js";
 import { DEFAULT_PROVIDER_ID, getProvider, type ProviderDef } from "./providers/index.js";
 import type { AccountSnapshot, CredentialStatus, QuotaTier, TotalQuota } from "./types.js";
+
+// 所有 dispatcher 共用的超时基线
+const BASE_AGENT_OPTS = { connectTimeout: 10_000, headersTimeout: 60_000, bodyTimeout: 0 } as const;
+
+/**
+ * 按 proxy URL 的 scheme 选连接器：
+ *  - socks5/socks5h/socks4(a)：走 fetch-socks 的 SOCKS 连接器(支持用户名/密码认证)
+ *  - http/https：undici 原生 ProxyAgent(CONNECT 隧道)
+ *  - 无 proxy：直连 Agent
+ * undici 的 ProxyAgent 不支持 SOCKS，所以 SOCKS 必须单独走 socksDispatcher。
+ */
+function createDispatcher(proxyUrl: string | undefined): Dispatcher {
+  if (!proxyUrl) return new Agent(BASE_AGENT_OPTS);
+  const u = new URL(proxyUrl);
+  const scheme = u.protocol.replace(/:$/, "");
+  if (scheme === "socks" || scheme === "socks5" || scheme === "socks5h" || scheme === "socks4" || scheme === "socks4a") {
+    const type: 4 | 5 = scheme.startsWith("socks4") ? 4 : 5;
+    return socksDispatcher(
+      {
+        type,
+        host: u.hostname,
+        port: Number(u.port) || 1080,
+        // URL 里的认证段;为空则不带认证
+        userId: u.username ? decodeURIComponent(u.username) : undefined,
+        password: u.password ? decodeURIComponent(u.password) : undefined,
+      },
+      { ...BASE_AGENT_OPTS },
+    );
+  }
+  return new ProxyAgent({ uri: proxyUrl, ...BASE_AGENT_OPTS });
+}
 
 export interface CooldownConfig {
   cooldownAfter5xxMs: number;
@@ -49,18 +81,7 @@ export class Account {
     this.model = model;
     this.accessKey = cfg.accessKey;
     this.secretKey = cfg.secretKey;
-    this.dispatcher = cfg.proxy
-      ? new ProxyAgent({
-          uri: cfg.proxy,
-          connectTimeout: 10_000,
-          headersTimeout: 60_000,
-          bodyTimeout: 0,
-        })
-      : new Agent({
-          connectTimeout: 10_000,
-          headersTimeout: 60_000,
-          bodyTimeout: 0,
-        });
+    this.dispatcher = createDispatcher(cfg.proxy);
   }
 
   /** 所有 tier 中最高的已用比例。无 tier(如无 quota 的 provider)时返回 null。 */

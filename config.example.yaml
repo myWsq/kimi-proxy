@@ -22,7 +22,9 @@ accounts:
     # provider 省略时默认 "kimi"
   - name: "kimi-B"
     apiKey: "sk-xxxxxxxxB"
-    proxy: "http://127.0.0.1:7890"   # 可选，账号独立出站代理
+    # 可选，账号独立出站代理。支持 http(s) 与 socks5(含用户名/密码认证)：
+    #   http://user:pass@host:port  /  socks5://user:pass@host:1080
+    proxy: "socks5://user:pass@127.0.0.1:1080"
   - name: "glm-A"
     provider: "glm"                  # 引用 src/providers/ 注册表里的 id
     apiKey: "zp-xxxxxxxx"
