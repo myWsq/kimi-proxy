@@ -17,8 +17,8 @@ providers:
     model: "ark-code-latest"                     # 方舟 Coding Plan；也可填 doubao-seed-code-preview-latest 等
   mimo:
     model: "mimo-v2.5"                            # 小米 MiMo Token Plan（订阅制）
-    # baseUrl 默认 CN 区；海外区改成 https://token-plan-sgp.xiaomimimo.com/anthropic
-    # baseUrl: "https://token-plan-sgp.xiaomimimo.com/anthropic"
+    # baseUrl 默认 CN 区；海外区(阿姆斯特丹)改成 https://token-plan-ams.xiaomimimo.com/anthropic
+    # baseUrl: "https://token-plan-ams.xiaomimimo.com/anthropic"
 
 accounts:
   - name: "kimi-A"
