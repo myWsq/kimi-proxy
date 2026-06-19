@@ -37,6 +37,13 @@ const configSchema = z.object({
     logFileMaxSize: z.string().default("50M"),
     // 保留多少个滚动文件（含当前）
     logFileMaxFiles: z.number().int().min(1).default(10),
+    // 请求快照日志：把每个进来的请求(method/url/headers/body)整条落盘一份。
+    // 留空则关闭。按小时轮换 + 数量上限，磁盘占用恒定有界。
+    requestLogFile: z.string().optional(),
+    // 保留多少小时的请求快照（按小时一个文件），默认 24 ≈ 近 1 天
+    requestLogRetentionHours: z.number().int().min(1).default(24),
+    // 单个小时文件大小上限，暴量时提前切，避免单文件过大
+    requestLogMaxSize: z.string().default("100M"),
   }),
   upstream: z
     .object({

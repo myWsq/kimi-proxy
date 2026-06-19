@@ -50,6 +50,11 @@ accounts:
 #   logFile: "./logs/kimi-proxy.log"  # 开启文件日志；按大小滚动 + 自动清理
 #   logFileMaxSize: "50M"
 #   logFileMaxFiles: 10
+#   # 请求快照日志：每个请求(method/url/headers/body)整条落盘一份，与 logLevel 无关。
+#   # 按小时轮换、只留近 1 天，磁盘占用有界。留空则关闭。
+#   requestLogFile: "./logs/requests.log"
+#   requestLogRetentionHours: 24      # 保留多少小时（每小时一个文件）≈ 近 1 天
+#   requestLogMaxSize: "100M"         # 单个小时文件大小上限，暴量时提前切
 #
 # upstream:
 #   # baseUrl / quotaPath 已废弃（地址由 provider 决定），保留仅兼容旧配置

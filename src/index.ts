@@ -1,6 +1,7 @@
 import Fastify, { type FastifyBaseLogger } from "fastify";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
+import { createRequestLogger, type Logger } from "./reqlog.js";
 import { AccountPool } from "./pool.js";
 import { QuotaPoller } from "./poller.js";
 import { Router } from "./router.js";
@@ -17,12 +18,23 @@ async function main(): Promise<void> {
     logFileMaxFiles: cfg.server.logFileMaxFiles,
   });
 
+  // 请求快照日志（可选）：每个请求整条落盘，按小时轮换，只留近 N 小时
+  let requestLogger: Logger | undefined;
+  if (cfg.server.requestLogFile) {
+    requestLogger = await createRequestLogger({
+      file: cfg.server.requestLogFile,
+      retentionHours: cfg.server.requestLogRetentionHours,
+      maxSize: cfg.server.requestLogMaxSize,
+    });
+  }
+
   logger.info(
     {
       port: cfg.server.port,
       accounts: cfg.accounts.length,
       policy: cfg.server.policy,
       affinityHeader: cfg.server.affinityHeader,
+      requestLog: cfg.server.requestLogFile ?? false,
     },
     "starting kimi-proxy",
   );
@@ -56,6 +68,7 @@ async function main(): Promise<void> {
     proxyToken: cfg.server.proxyToken,
     affinityHeader: cfg.server.affinityHeader,
     logger,
+    requestLogger,
     forwardCtx: {
       requestTimeoutMs: cfg.upstream.requestTimeoutMs,
       cooldown: {

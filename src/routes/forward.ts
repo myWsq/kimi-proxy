@@ -13,6 +13,8 @@ export interface ForwardRouteOptions {
   affinityHeader: string;
   forwardCtx: ForwardContext;
   logger: Logger;
+  // 可选的请求快照日志：每个请求整条落盘一份(method/url/headers/body)
+  requestLogger?: Logger | undefined;
 }
 
 export function registerForwardRoute(
@@ -50,6 +52,21 @@ export function registerForwardRoute(
       );
 
       const affinityKey = resolveAffinityKey(req, parsedBody, opts.affinityHeader);
+
+      // 请求快照：把每个请求整条落盘一份(method/url/headers/body)，与 logLevel 无关。
+      // 按小时轮换、只留近 1 天，磁盘占用有界（见 reqlog.ts）。
+      opts.requestLogger?.info(
+        {
+          method: req.method,
+          url: req.url,
+          ip: req.ip,
+          affinityKey,
+          headers: req.headers,
+          body: body ? body.toString("utf8") : null,
+        },
+        "request",
+      );
+
       // 剥掉 /anthropic 前缀后透明转发，Kimi For Coding 原生兼容 Anthropic 协议
       const upstreamPath = req.url.replace(/^\/anthropic/, "") || "/";
 
