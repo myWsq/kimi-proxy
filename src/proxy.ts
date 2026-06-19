@@ -5,7 +5,6 @@ import type { Account, CooldownConfig } from "./pool.js";
 import type { Router } from "./router.js";
 
 export interface ForwardContext {
-  upstreamBaseUrl: string;
   requestTimeoutMs: number;
   cooldown: CooldownConfig;
   logger: Logger;
@@ -52,6 +51,7 @@ export async function forwardWithFailover(
   reply: FastifyReply,
   router: Router,
   body: Buffer | null,
+  parsedBody: Record<string, unknown> | null,
   upstreamPath: string,
   affinityKey: string | null,
   ctx: ForwardContext,
@@ -77,7 +77,7 @@ export async function forwardWithFailover(
     }
     tried.add(account.name);
 
-    const outcome = await attemptOnce(req, reply, account, body, upstreamPath, affinityKey, ctx);
+    const outcome = await attemptOnce(req, reply, account, body, parsedBody, upstreamPath, affinityKey, ctx);
     if (outcome.kind === "streamed") return;
 
     failures.push(`${account.name}: ${outcome.status} ${outcome.reason}`);
@@ -93,12 +93,18 @@ async function attemptOnce(
   reply: FastifyReply,
   account: Account,
   body: Buffer | null,
+  parsedBody: Record<string, unknown> | null,
   upstreamPath: string,
   affinityKey: string | null,
   ctx: ForwardContext,
 ): Promise<AttemptOutcome> {
-  const url = joinUrl(ctx.upstreamBaseUrl, upstreamPath);
+  const url = joinUrl(account.baseUrl, upstreamPath);
   const headers = buildUpstreamHeaders(req.headers, account.apiKey);
+  // 强制把请求体里的 model 覆盖成该账号 provider 固定的 model。
+  // 按账号在每次 attempt 重写:故障转移跨 provider 时 model 随之切换。
+  const outgoingBody = parsedBody
+    ? Buffer.from(JSON.stringify({ ...parsedBody, model: account.model }))
+    : body;
 
   account.inflight++;
   account.totalRequests++;
@@ -107,7 +113,7 @@ async function attemptOnce(
     const upstream = await undiciRequest(url, {
       method: req.method as never,
       headers,
-      body: body ?? undefined,
+      body: outgoingBody ?? undefined,
       dispatcher: account.dispatcher,
       headersTimeout: ctx.requestTimeoutMs,
       bodyTimeout: 0,

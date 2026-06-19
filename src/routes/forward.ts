@@ -35,6 +35,8 @@ export function registerForwardRoute(
       }
 
       const body = readBody(req);
+      // 解析一次:既用于抽亲和 key,也用于转发时覆盖 model。非 JSON 对象则为 null。
+      const parsedBody = parseJsonObject(body);
 
       // body 含用户对话原文，只在 debug 级别打印（调试时手动 logLevel=debug 即可看到）
       opts.logger.debug(
@@ -47,7 +49,7 @@ export function registerForwardRoute(
         "incoming_request",
       );
 
-      const affinityKey = resolveAffinityKey(req, body, opts.affinityHeader);
+      const affinityKey = resolveAffinityKey(req, parsedBody, opts.affinityHeader);
       // 剥掉 /anthropic 前缀后透明转发，Kimi For Coding 原生兼容 Anthropic 协议
       const upstreamPath = req.url.replace(/^\/anthropic/, "") || "/";
 
@@ -61,6 +63,7 @@ export function registerForwardRoute(
         reply,
         opts.router,
         body,
+        parsedBody,
         upstreamPath,
         affinityKey,
         opts.forwardCtx,
@@ -76,19 +79,41 @@ function readBody(req: FastifyRequest): Buffer | null {
   return null;
 }
 
+// Claude Code 在每个请求上带此头(per-session UUID,会话内稳定),是最可靠的
+// 会话亲和来源。显式置于最高优先级,无需用户配置 affinityHeader 即可生效。
+const CLAUDE_CODE_SESSION_HEADER = "x-claude-code-session-id";
+
 function resolveAffinityKey(
   req: FastifyRequest,
-  body: Buffer | null,
+  parsedBody: Record<string, unknown> | null,
   headerName: string,
 ): string | null {
-  const headerVal = req.headers[headerName.toLowerCase()];
-  if (typeof headerVal === "string" && headerVal.length > 0) return `h:${headerVal}`;
-  if (Array.isArray(headerVal) && headerVal[0]) return `h:${headerVal[0]}`;
+  const ccSession = readHeader(req, CLAUDE_CODE_SESSION_HEADER);
+  if (ccSession) return `ccs:${ccSession}`;
 
-  if (!body) return null;
+  const headerVal = readHeader(req, headerName.toLowerCase());
+  if (headerVal) return `h:${headerVal}`;
+
+  if (!parsedBody) return null;
+  return extractAffinityFromBody(parsedBody);
+}
+
+function readHeader(req: FastifyRequest, name: string): string | null {
+  const v = req.headers[name];
+  if (typeof v === "string" && v.length > 0) return v;
+  if (Array.isArray(v) && v[0]) return v[0];
+  return null;
+}
+
+/** 把请求体解析成 JSON 对象;非 JSON 或非对象(数组/标量)返回 null。 */
+function parseJsonObject(body: Buffer | null): Record<string, unknown> | null {
+  if (!body || body.length === 0) return null;
   try {
     const parsed = JSON.parse(body.toString("utf8"));
-    return extractAffinityFromBody(parsed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
   } catch {
     return null;
   }

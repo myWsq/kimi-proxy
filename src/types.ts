@@ -20,6 +20,10 @@ export interface TotalQuota {
 
 export interface AccountSnapshot {
   name: string;
+  /** 所属 provider id（如 kimi、glm）。 */
+  provider: string;
+  /** 该账号固定使用的 model（转发时强制覆盖请求体）。 */
+  model: string;
   hasProxy: boolean;
   healthy: boolean;
   credentialStatus: CredentialStatus;

@@ -1,5 +1,6 @@
 import { Agent, ProxyAgent, type Dispatcher } from "undici";
-import type { AccountConfig } from "./config.js";
+import type { AccountConfig, ProviderConfig } from "./config.js";
+import { DEFAULT_PROVIDER_ID, getProvider, type ProviderDef } from "./providers/index.js";
 import type { AccountSnapshot, CredentialStatus, QuotaTier, TotalQuota } from "./types.js";
 
 export interface CooldownConfig {
@@ -15,6 +16,12 @@ export class Account {
   readonly apiKey: string;
   readonly proxyUrl: string | undefined;
   readonly dispatcher: Dispatcher;
+  /** 此账号所属 provider 定义(解析策略、默认地址)。 */
+  readonly provider: ProviderDef;
+  /** 生效上游地址:provider 默认 baseUrl,被 config providers 覆盖后的结果。 */
+  readonly baseUrl: string;
+  /** 生效 model:转发时强制写入请求体,覆盖客户端指定的 model。 */
+  readonly model: string;
 
   healthy = true;
   credentialStatus: CredentialStatus = "unknown";
@@ -30,10 +37,13 @@ export class Account {
   /** 终身配额（从 /v1/usages 的 totalQuota 字段解析），null 表示上游未返回 */
   totalQuota: TotalQuota | null = null;
 
-  constructor(cfg: AccountConfig) {
+  constructor(cfg: AccountConfig, provider: ProviderDef, baseUrl: string, model: string) {
     this.name = cfg.name;
     this.apiKey = cfg.apiKey;
     this.proxyUrl = cfg.proxy;
+    this.provider = provider;
+    this.baseUrl = baseUrl;
+    this.model = model;
     this.dispatcher = cfg.proxy
       ? new ProxyAgent({
           uri: cfg.proxy,
@@ -48,27 +58,25 @@ export class Account {
         });
   }
 
-  /** 5 小时窗口已用比例。无数据时返回 null。 */
-  fiveHourUtilization(): number | null {
-    const t = this.tiers.find((x) => x.name === "five_hour");
-    return t ? t.utilization : null;
+  /** 所有 tier 中最高的已用比例。无 tier(如无 quota 的 provider)时返回 null。 */
+  maxTierUtilization(): number | null {
+    if (this.tiers.length === 0) return null;
+    let max = 0;
+    for (const t of this.tiers) if (t.utilization > max) max = t.utilization;
+    return max;
   }
 
-  /** 周/总额已用比例。无数据时返回 null。 */
-  weeklyUtilization(): number | null {
-    const t = this.tiers.find((x) => x.name === "weekly_limit");
-    return t ? t.utilization : null;
-  }
-
-  /** 综合可用判定：未爆 5 小时窗口、未爆周限、凭证有效、不在冷却。 */
+  /**
+   * 综合可用判定(provider 无关):凭证有效、不在冷却、且没有任何 tier 爆掉。
+   * 无 quota 的 provider 没有 tier,只要 healthy + 不在冷却即可选。
+   */
   isSelectable(): boolean {
     if (!this.healthy) return false;
     if (this.credentialStatus === "expired") return false;
     if (Date.now() < this.cooldownUntil) return false;
-    const five = this.fiveHourUtilization();
-    const weekly = this.weeklyUtilization();
-    if (five !== null && five >= 100) return false;
-    if (weekly !== null && weekly >= 100) return false;
+    for (const t of this.tiers) {
+      if (t.utilization >= 100) return false;
+    }
     return true;
   }
 
@@ -123,6 +131,8 @@ export class Account {
     const remaining = Math.max(0, this.cooldownUntil - Date.now());
     return {
       name: this.name,
+      provider: this.provider.id,
+      model: this.model,
       hasProxy: this.proxyUrl !== undefined,
       healthy: this.healthy,
       credentialStatus: this.credentialStatus,
@@ -148,8 +158,18 @@ export class AccountPool {
   private readonly accounts: Account[];
   private readonly byName: Map<string, Account>;
 
-  constructor(configs: AccountConfig[]) {
-    this.accounts = configs.map((c) => new Account(c));
+  constructor(configs: AccountConfig[], providerConfigs?: Record<string, ProviderConfig>) {
+    this.accounts = configs.map((c) => {
+      const id = c.provider ?? DEFAULT_PROVIDER_ID;
+      const provider = getProvider(id);
+      // config.ts 已校验过 id 合法,这里兜底以满足类型收窄
+      if (!provider) throw new Error(`Unknown provider "${id}" for account "${c.name}"`);
+      const pc = providerConfigs?.[id];
+      // config.ts 已校验被引用 provider 必有 model,这里兜底
+      if (!pc?.model) throw new Error(`Provider "${id}" has no model configured (account "${c.name}")`);
+      const baseUrl = pc.baseUrl ?? provider.baseUrl;
+      return new Account(c, provider, baseUrl, pc.model);
+    });
     this.byName = new Map(this.accounts.map((a) => [a.name, a]));
   }
 

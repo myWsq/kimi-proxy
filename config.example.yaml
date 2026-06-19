@@ -4,18 +4,39 @@
 server:
   proxyToken: "sk-local-change-me"   # 客户端 Bearer 用此 token
 
+# 每个被账号引用的 provider，在此配一次 model（必填）。
+# model 由本服务固定下发：转发时请求体里的 model 会被强制覆盖成这里的值，
+# 聚合入口不再支持客户端指定 model。baseUrl 可选（省略用代码默认地址）。
+providers:
+  kimi:
+    model: "kimi-k2.6"
+  glm:
+    model: "glm-4.6"
+    # baseUrl: "https://my-gateway/anthropic"   # 可选，覆盖代码默认地址
+
 accounts:
   - name: "kimi-A"
     apiKey: "sk-xxxxxxxxA"
+    # provider 省略时默认 "kimi"
   - name: "kimi-B"
     apiKey: "sk-xxxxxxxxB"
     proxy: "http://127.0.0.1:7890"   # 可选，账号独立出站代理
+  - name: "glm-A"
+    provider: "glm"                  # 引用 src/providers/ 注册表里的 id
+    apiKey: "zp-xxxxxxxx"
+
+# ── Provider ────────────────────────────────────────────────────
+# provider 的上游地址、配额解析逻辑定义在代码里（src/providers/），model 在上面配置。
+# 新增 provider = 写一个模块并在 src/providers/index.ts 注册，再在 providers 配 model。
+#
+# 迁移提示：旧版用 upstream.baseUrl 覆盖 Kimi 地址的，请改用 providers.kimi.baseUrl，
+# upstream.baseUrl / quotaPath 现已不再生效（保留仅为兼容解析，不报错）。
 
 # ── 以下都可选，默认值已能直接用 ────────────────────────────────
 # server:
 #   host: "0.0.0.0"
 #   port: 8787
-#   affinityHeader: "x-session-id"
+#   affinityHeader: "x-session-id"   # 额外亲和 header；Claude Code 的 x-claude-code-session-id 已内置最高优先级
 #   policy: "affinity-first"          # affinity-first | least-used | round-robin
 #   logLevel: "info"
 #   logFile: "./logs/kimi-proxy.log"  # 开启文件日志；按大小滚动 + 自动清理
@@ -23,8 +44,7 @@ accounts:
 #   logFileMaxFiles: 10
 #
 # upstream:
-#   baseUrl: "https://api.kimi.com/coding"
-#   quotaPath: "/v1/usages"
+#   # baseUrl / quotaPath 已废弃（地址由 provider 决定），保留仅兼容旧配置
 #   pollIntervalMs: 30000
 #   requestTimeoutMs: 600000
 #   # 失败冷却：避免账号 429 后立刻被 poller 重新标 healthy 又派单

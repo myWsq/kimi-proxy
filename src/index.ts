@@ -27,11 +27,9 @@ async function main(): Promise<void> {
     "starting kimi-proxy",
   );
 
-  const pool = new AccountPool(cfg.accounts);
+  const pool = new AccountPool(cfg.accounts, cfg.providers);
   const router = new Router(pool, { policy: cfg.server.policy, logger });
   const poller = new QuotaPoller(pool, {
-    baseUrl: cfg.upstream.baseUrl,
-    quotaPath: cfg.upstream.quotaPath,
     intervalMs: cfg.upstream.pollIntervalMs,
     logger,
   });
@@ -59,7 +57,6 @@ async function main(): Promise<void> {
     affinityHeader: cfg.server.affinityHeader,
     logger,
     forwardCtx: {
-      upstreamBaseUrl: cfg.upstream.baseUrl,
       requestTimeoutMs: cfg.upstream.requestTimeoutMs,
       cooldown: {
         cooldownAfter5xxMs: cfg.upstream.cooldownAfter5xxMs,

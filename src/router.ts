@@ -42,7 +42,9 @@ export class Router {
       return picked ?? null;
     }
 
-    // least-used：在 5 小时未爆的账号里挑「周用量最低」，并列时挑「inflight 最少」
+    // least-used：挑「最高 tier 利用率最低」，并列时挑「inflight 最少」。
+    // provider 无关；无 quota 的账号利用率记 0,故 least-used 下会被优先选中
+    // (affinity-first 默认策略按哈希撒,不受此影响)。
     return pickLeastUsed(candidates);
   }
 }
@@ -61,15 +63,13 @@ function pickLeastUsed(candidates: Account[]): Account {
   return best;
 }
 
-function scoreOf(a: Account): [number, number, number] {
-  // 主键：周用量，越低越优；次：5 小时用量；末：inflight
-  const weekly = a.weeklyUtilization() ?? 0;
-  const five = a.fiveHourUtilization() ?? 0;
-  return [weekly, five, a.inflight];
+function scoreOf(a: Account): [number, number] {
+  // 主键：最高 tier 利用率,越低越优；次：inflight
+  return [a.maxTierUtilization() ?? 0, a.inflight];
 }
 
-function compare(a: [number, number, number], b: [number, number, number]): number {
-  for (let i = 0; i < 3; i++) {
+function compare(a: [number, number], b: [number, number]): number {
+  for (let i = 0; i < a.length; i++) {
     const av = a[i]!;
     const bv = b[i]!;
     if (av !== bv) return av - bv;
