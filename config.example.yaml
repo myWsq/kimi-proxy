@@ -15,6 +15,10 @@ providers:
     # baseUrl: "https://my-gateway/anthropic"   # 可选，覆盖代码默认地址
   ark:
     model: "ark-code-latest"                     # 方舟 Coding Plan；也可填 doubao-seed-code-preview-latest 等
+  mimo:
+    model: "mimo-v2.5"                            # 小米 MiMo Token Plan（订阅制）
+    # baseUrl 默认 CN 区；海外区改成 https://token-plan-sgp.xiaomimimo.com/anthropic
+    # baseUrl: "https://token-plan-sgp.xiaomimimo.com/anthropic"
 
 accounts:
   - name: "kimi-A"
