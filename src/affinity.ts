@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
  * 从 Anthropic Messages 请求体中抽取会话亲和 key。
  *
  * 优先级：
- *  1. metadata.user_id —— Anthropic 标准会话标识，Claude Code 等客户端会带
+ *  1. metadata.user_id —— Anthropic 标准会话标识，Claude Code 等客户端会带；
+ *     若它是 Claude Code 的 JSON 串则取其 session_id，对齐 header 路径产出 ccs:<id>
  *  2. system + 首条 user 消息内容 —— 同一 agent 配置自然落到同一账号，保 prompt cache
  *
  * 找不到任何稳定特征时返回 null，路由层应降级到负载策略。
@@ -16,7 +17,20 @@ export function extractAffinityFromBody(body: unknown): string | null {
   const metadata = obj.metadata;
   if (metadata && typeof metadata === "object") {
     const userId = (metadata as Record<string, unknown>).user_id;
-    if (typeof userId === "string" && userId.length > 0) return `uid:${userId}`;
+    if (typeof userId === "string" && userId.length > 0) {
+      // Claude Code 把 user_id 塞成 JSON 串({device_id, account_uuid, session_id})。
+      // 能取到里面的 session_id 时,对齐 header 路径同样产出 ccs:<session_id>,
+      // 这样万一反代剥了 x-claude-code-session-id 头,同一会话仍落到同一账号、不丢 cache。
+      try {
+        const inner = JSON.parse(userId) as Record<string, unknown>;
+        if (typeof inner?.session_id === "string" && inner.session_id.length > 0) {
+          return `ccs:${inner.session_id}`;
+        }
+      } catch {
+        // 普通字符串,按原样作为亲和 key
+      }
+      return `uid:${userId}`;
+    }
   }
 
   const fingerprint = fingerprintMessages(obj);
