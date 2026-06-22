@@ -69,13 +69,16 @@ export class UsageTap {
       const msg = o.message as Record<string, unknown> | undefined;
       this.applyInputUsage(msg?.usage);
     } else if (o.type === "message_delta") {
-      // message_delta.usage.output_tokens 为累计值，保留最后一个即最终值
+      // message_delta.usage.output_tokens 为累计值，保留最后一个即最终值。
+      // 部分上游(如小米 MiMo)把真实 input_tokens / cache_read_input_tokens 放在
+      // 最终 message_delta 里，而 message_start 的对应字段全是 0，故这里也并入 input/cache。
       const usage = o.usage as Record<string, unknown> | undefined;
       const out = toNumber(usage?.output_tokens);
       if (out !== null) {
         this.output = out;
         this.sawUsage = true;
       }
+      this.mergeInputUsage(usage);
     }
   }
 
@@ -90,6 +93,21 @@ export class UsageTap {
     if (cc !== null) this.cacheCreation = cc;
     if (cr !== null) this.cacheRead = cr;
     if (inp !== null || cc !== null || cr !== null) this.sawUsage = true;
+  }
+
+  /**
+   * message_delta 里若带 input/cache(MiMo 把真实值放这儿、message_start 全为 0),
+   * 按 max 并入：只升不降，绝不让已取到的真实值被后来的占位 0 覆盖。
+   */
+  private mergeInputUsage(usage: unknown): void {
+    if (!usage || typeof usage !== "object") return;
+    const u = usage as Record<string, unknown>;
+    const inp = toNumber(u.input_tokens);
+    const cc = toNumber(u.cache_creation_input_tokens);
+    const cr = toNumber(u.cache_read_input_tokens);
+    if (inp !== null && inp > this.input) { this.input = inp; this.sawUsage = true; }
+    if (cc !== null && cc > this.cacheCreation) { this.cacheCreation = cc; this.sawUsage = true; }
+    if (cr !== null && cr > this.cacheRead) { this.cacheRead = cr; this.sawUsage = true; }
   }
 
   private pushJson(chunk: Buffer): void {
