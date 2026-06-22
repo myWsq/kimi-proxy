@@ -3,10 +3,13 @@ import type { Logger } from "pino";
 import { request as undiciRequest } from "undici";
 import type { Account, CooldownConfig } from "./pool.js";
 import type { Router } from "./router.js";
+import type { StatsStore } from "./stats.js";
+import { UsageTap } from "./usage.js";
 
 export interface ForwardContext {
   requestTimeoutMs: number;
   cooldown: CooldownConfig;
+  stats: StatsStore;
   logger: Logger;
 }
 
@@ -107,7 +110,7 @@ async function attemptOnce(
     : body;
 
   account.inflight++;
-  account.totalRequests++;
+  ctx.stats.recordRequest(account.name);
 
   try {
     const upstream = await undiciRequest(url, {
@@ -125,7 +128,7 @@ async function attemptOnce(
     if (status === 429 || (status >= 500 && status < 600)) {
       const text = await upstream.body.text().catch(() => "");
       account.lastError = `HTTP ${status}: ${truncate(text, 200)}`;
-      account.totalErrors++;
+      ctx.stats.recordError(account.name);
       const reason = status === 429 ? "rate_limit_429" : "upstream_5xx";
       const cdMs = account.computeCooldownFor(reason, ctx.cooldown);
       account.cooldown(cdMs);
@@ -141,7 +144,7 @@ async function attemptOnce(
       account.credentialStatus = "expired";
       account.healthy = false;
       account.lastError = `HTTP ${status}`;
-      account.totalErrors++;
+      ctx.stats.recordError(account.name);
       // 直接把上游错误透传给客户端：用户得知凭证问题
     }
 
@@ -158,13 +161,20 @@ async function attemptOnce(
     if (affinityKey) raw.setHeader("x-kimi-proxy-affinity", affinityKey);
 
     // 2xx 视为成功调用：清掉历史冷却（账号确认可用）
-    if (status >= 200 && status < 300) account.clearCooldown();
+    const ok2xx = status >= 200 && status < 300;
+    if (ok2xx) account.clearCooldown();
 
-    await pipeStream(upstream.body, raw);
+    // 仅成功响应才解析 token usage：旁路喂给 tap，不阻塞透传
+    const tap = ok2xx ? new UsageTap(headerValue(upstream.headers["content-type"])) : null;
+    await pipeStream(upstream.body, raw, tap ? (chunk) => tap.push(chunk) : undefined);
+    if (tap) {
+      const usage = tap.finish();
+      if (usage) ctx.stats.recordUsage(account.name, usage);
+    }
     return { kind: "streamed" };
   } catch (err) {
     // 网络层错误：socket reset、DNS、代理拒绝等，可以切账号重试
-    account.totalErrors++;
+    ctx.stats.recordError(account.name);
     account.lastError = (err as Error).message;
     const cdMs = account.computeCooldownFor("network_error", ctx.cooldown);
     account.cooldown(cdMs);
@@ -202,16 +212,29 @@ function buildUpstreamHeaders(
 async function pipeStream(
   src: NodeJS.ReadableStream,
   dst: NodeJS.WritableStream,
+  onData?: (chunk: Buffer) => void,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     src.on("error", reject);
     dst.on("error", reject);
+    // 旁路监听 data 喂统计 tap：与下面的 pipe 共存，不改变透传字节
+    if (onData) {
+      src.on("data", (chunk: Buffer) => {
+        if (Buffer.isBuffer(chunk)) onData(chunk);
+      });
+    }
     src.on("end", () => {
       if (!(dst as { writableEnded?: boolean }).writableEnded) dst.end();
       resolve();
     });
     src.pipe(dst as never, { end: false });
   });
+}
+
+/** 取响应头值的第一个字符串（undici 头可能是 string | string[]）。 */
+function headerValue(v: string | string[] | undefined): string | undefined {
+  if (v === undefined) return undefined;
+  return Array.isArray(v) ? v[0] : v;
 }
 
 function truncate(s: string, n: number): string {

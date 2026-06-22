@@ -21,6 +21,9 @@ const accountSchema = z.object({
 const providerConfigSchema = z.object({
   model: z.string().min(1),
   baseUrl: z.string().url().optional(),
+  // 严格主备优先级:数值越大越优先。路由只从「当前可用账号里最高优先级的一档」出,
+  // 该档全部不可用才降到下一档。不配=0,所有 provider 同档时退化为原有行为。
+  priority: z.number().int().default(0),
 });
 
 const configSchema = z.object({
@@ -44,6 +47,10 @@ const configSchema = z.object({
     requestLogRetentionHours: z.number().int().min(1).default(24),
     // 单个小时文件大小上限，暴量时提前切，避免单文件过大
     requestLogMaxSize: z.string().default("100M"),
+    // 每账号累计统计(请求/错误/token)的持久化文件，跨重启累加
+    statsFile: z.string().default("./logs/stats.json"),
+    // 统计标脏后多久落一次盘（毫秒）
+    statsFlushIntervalMs: z.number().int().min(1000).default(10_000),
   }),
   upstream: z
     .object({

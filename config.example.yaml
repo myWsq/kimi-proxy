@@ -61,6 +61,11 @@ accounts:
 #   requestLogFile: "./logs/requests.log"
 #   requestLogRetentionHours: 24      # 保留多少小时（每小时一个文件）≈ 近 1 天
 #   requestLogMaxSize: "100M"         # 单个小时文件大小上限，暴量时提前切
+#   # 每账号累计统计（请求/错误/4 类 token），持久化到本地磁盘，跨重启累加。
+#   # 通过 GET /accounts 查看（totalRequests/totalErrors/inputTokens/outputTokens/
+#   # cacheCreationTokens/cacheReadTokens/totalTokens/lastRequestAt）。
+#   statsFile: "./logs/stats.json"    # 持久化文件路径，默认即此
+#   statsFlushIntervalMs: 10000       # 标脏后多久落一次盘（退出时也会同步落盘）
 #
 # upstream:
 #   # baseUrl / quotaPath 已废弃（地址由 provider 决定），保留仅兼容旧配置

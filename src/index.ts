@@ -5,6 +5,7 @@ import { createRequestLogger, type Logger } from "./reqlog.js";
 import { AccountPool } from "./pool.js";
 import { QuotaPoller } from "./poller.js";
 import { Router } from "./router.js";
+import { StatsStore } from "./stats.js";
 import { registerAccountsRoute } from "./routes/accounts.js";
 import { registerHealthRoute } from "./routes/health.js";
 import { registerForwardRoute } from "./routes/forward.js";
@@ -41,6 +42,14 @@ async function main(): Promise<void> {
 
   const pool = new AccountPool(cfg.accounts, cfg.providers);
   const router = new Router(pool, { policy: cfg.server.policy, logger });
+  // 每账号累计统计(请求/错误/token)：启动读盘恢复，周期+退出落盘
+  const stats = new StatsStore({
+    file: cfg.server.statsFile,
+    flushIntervalMs: cfg.server.statsFlushIntervalMs,
+    logger,
+  });
+  stats.loadSync();
+  stats.start();
   const poller = new QuotaPoller(pool, {
     intervalMs: cfg.upstream.pollIntervalMs,
     logger,
@@ -60,7 +69,7 @@ async function main(): Promise<void> {
     done();
   });
 
-  registerAccountsRoute(app, pool);
+  registerAccountsRoute(app, pool, stats);
   registerHealthRoute(app, pool);
   registerForwardRoute(app, {
     pool,
@@ -71,6 +80,7 @@ async function main(): Promise<void> {
     requestLogger,
     forwardCtx: {
       requestTimeoutMs: cfg.upstream.requestTimeoutMs,
+      stats,
       cooldown: {
         cooldownAfter5xxMs: cfg.upstream.cooldownAfter5xxMs,
         cooldownAfterNetworkErrorMs: cfg.upstream.cooldownAfterNetworkErrorMs,
@@ -93,6 +103,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logger.info({ signal }, "shutting down");
     poller.stop();
+    stats.stopAndFlushSync();
     try {
       await app.close();
     } catch (err) {

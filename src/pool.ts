@@ -2,6 +2,7 @@ import { Agent, ProxyAgent, type Dispatcher } from "undici";
 import { socksDispatcher } from "fetch-socks";
 import type { AccountConfig, ProviderConfig } from "./config.js";
 import { DEFAULT_PROVIDER_ID, getProvider, type ProviderDef } from "./providers/index.js";
+import type { AccountStats, StatsStore } from "./stats.js";
 import type { AccountSnapshot, CredentialStatus, QuotaTier, TotalQuota } from "./types.js";
 
 // 所有 dispatcher 共用的超时基线
@@ -57,6 +58,8 @@ export class Account {
   readonly baseUrl: string;
   /** 生效 model:转发时强制写入请求体,覆盖客户端指定的 model。 */
   readonly model: string;
+  /** provider 的严格主备优先级,数值越大越优先(不配为 0)。 */
+  readonly priority: number;
 
   healthy = true;
   credentialStatus: CredentialStatus = "unknown";
@@ -65,20 +68,19 @@ export class Account {
   lastFetchedAt: number | null = null;
   lastSuccessAt: number | null = null;
   inflight = 0;
-  totalRequests = 0;
-  totalErrors = 0;
   /** 冷却到期时间（毫秒 epoch），0 表示无冷却 */
   cooldownUntil = 0;
   /** 终身配额（从 /v1/usages 的 totalQuota 字段解析），null 表示上游未返回 */
   totalQuota: TotalQuota | null = null;
 
-  constructor(cfg: AccountConfig, provider: ProviderDef, baseUrl: string, model: string) {
+  constructor(cfg: AccountConfig, provider: ProviderDef, baseUrl: string, model: string, priority: number) {
     this.name = cfg.name;
     this.apiKey = cfg.apiKey;
     this.proxyUrl = cfg.proxy;
     this.provider = provider;
     this.baseUrl = baseUrl;
     this.model = model;
+    this.priority = priority;
     this.accessKey = cfg.accessKey;
     this.secretKey = cfg.secretKey;
     this.dispatcher = createDispatcher(cfg.proxy);
@@ -153,11 +155,15 @@ export class Account {
     }
   }
 
-  snapshot(): AccountSnapshot {
+  /** 合并实时状态（本对象）与持久化累计统计（stats 参数）成对外快照。 */
+  snapshot(stats: AccountStats): AccountSnapshot {
     const remaining = Math.max(0, this.cooldownUntil - Date.now());
+    const totalTokens =
+      stats.inputTokens + stats.outputTokens + stats.cacheCreationTokens + stats.cacheReadTokens;
     return {
       name: this.name,
       provider: this.provider.id,
+      priority: this.priority,
       model: this.model,
       hasProxy: this.proxyUrl !== undefined,
       healthy: this.healthy,
@@ -167,8 +173,14 @@ export class Account {
       lastFetchedAt: this.lastFetchedAt ? new Date(this.lastFetchedAt).toISOString() : null,
       lastSuccessAt: this.lastSuccessAt ? new Date(this.lastSuccessAt).toISOString() : null,
       inflight: this.inflight,
-      totalRequests: this.totalRequests,
-      totalErrors: this.totalErrors,
+      totalRequests: stats.requests,
+      totalErrors: stats.errors,
+      inputTokens: stats.inputTokens,
+      outputTokens: stats.outputTokens,
+      cacheCreationTokens: stats.cacheCreationTokens,
+      cacheReadTokens: stats.cacheReadTokens,
+      totalTokens,
+      lastRequestAt: stats.lastRequestAt ? new Date(stats.lastRequestAt).toISOString() : null,
       cooldownUntil: this.cooldownUntil > 0 ? new Date(this.cooldownUntil).toISOString() : null,
       cooldownRemainingMs: remaining,
       totalQuota: this.totalQuota,
@@ -194,7 +206,7 @@ export class AccountPool {
       // config.ts 已校验被引用 provider 必有 model,这里兜底
       if (!pc?.model) throw new Error(`Provider "${id}" has no model configured (account "${c.name}")`);
       const baseUrl = pc.baseUrl ?? provider.baseUrl;
-      return new Account(c, provider, baseUrl, pc.model);
+      return new Account(c, provider, baseUrl, pc.model, pc.priority ?? 0);
     });
     this.byName = new Map(this.accounts.map((a) => [a.name, a]));
   }
@@ -211,8 +223,8 @@ export class AccountPool {
     return this.accounts.filter((a) => a.isSelectable());
   }
 
-  snapshot(): AccountSnapshot[] {
-    return this.accounts.map((a) => a.snapshot());
+  snapshot(stats: StatsStore): AccountSnapshot[] {
+    return this.accounts.map((a) => a.snapshot(stats.get(a.name)));
   }
 
   async close(): Promise<void> {
