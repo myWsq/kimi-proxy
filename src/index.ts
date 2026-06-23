@@ -76,6 +76,7 @@ async function main(): Promise<void> {
     router,
     proxyToken: cfg.server.proxyToken,
     affinityHeader: cfg.server.affinityHeader,
+    providerHeader: cfg.server.providerHeader,
     logger,
     requestLogger,
     forwardCtx: {

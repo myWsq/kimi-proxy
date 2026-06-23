@@ -32,6 +32,9 @@ const configSchema = z.object({
     port: z.number().int().min(1).max(65535).default(8787),
     proxyToken: z.string().min(8),
     affinityHeader: z.string().default("x-session-id"),
+    // 客户端可在此 header 里指定 provider id,强制本次请求只从该 provider 的账号里选。
+    // 省略/留空则按默认严格主备 + 优先级路由。值必须是已配置账号引用的 provider。
+    providerHeader: z.string().default("x-set-provider"),
     policy: z.enum(["affinity-first", "least-used", "round-robin"]).default("affinity-first"),
     logLevel: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
     // 文件日志：留空则只输出 stdout

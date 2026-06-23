@@ -223,6 +223,11 @@ export class AccountPool {
     return this.accounts.filter((a) => a.isSelectable());
   }
 
+  /** 至少配了一个账号的 provider id 集合（header 显式指定 provider 时用于校验）。 */
+  providerIds(): Set<string> {
+    return new Set(this.accounts.map((a) => a.provider.id));
+  }
+
   snapshot(stats: StatsStore): AccountSnapshot[] {
     return this.accounts.map((a) => a.snapshot(stats.get(a.name)));
   }

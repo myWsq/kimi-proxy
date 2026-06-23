@@ -34,9 +34,18 @@ export class Router {
    *  ③ 档内按 policy：affinity-first 一致性哈希 / round-robin / least-used。
    *
    * @param exclude 已经试过的账号名（故障转移时跳过）
+   * @param providerId 非空时只在该 provider 的账号里选（header 显式指定 provider）；
+   *   先于优先级/粘性过滤，故属别 provider 的粘性绑定会自然落空、改在本 provider 内重选。
    */
-  pick(affinityKey: string | null, exclude?: ReadonlySet<string>): Account | null {
+  pick(
+    affinityKey: string | null,
+    exclude?: ReadonlySet<string>,
+    providerId?: string | null,
+  ): Account | null {
     let candidates = this.pool.selectable();
+    if (providerId) {
+      candidates = candidates.filter((a) => a.provider.id === providerId);
+    }
     if (exclude && exclude.size > 0) {
       candidates = candidates.filter((a) => !exclude.has(a.name));
     }

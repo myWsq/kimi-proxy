@@ -35,6 +35,7 @@ claude
 |---|---|
 | `server.proxyToken` | 客户端必须用此 token 做 Bearer 鉴权（服务内部替换为对应账号真实 key） |
 | `server.affinityHeader` | 额外的会话亲和 header（默认 `x-session-id`）。Claude Code 的 `x-claude-code-session-id` 已内置为最高优先级，无需配置 |
+| `server.providerHeader` | 主动指定 provider 的 header（默认 `x-set-provider`）。请求带此 header 时强制只从该 provider 的账号里选，绕过优先级；未配置的 provider 返回 400 |
 | `server.policy` | `affinity-first`（默认） / `least-used` / `round-robin` |
 | `server.logFile` | 可选，开启文件日志；按大小滚动到 `<file>.N.log`，超出 `logFileMaxFiles` 自动删最旧 |
 | `accounts[].name` | 账号名称（响应头 `x-kimi-proxy-account` 用） |
@@ -83,7 +84,10 @@ claude
 响应头额外回写：
 
 - `x-kimi-proxy-account: <选中账号名>`
+- `x-kimi-proxy-provider: <选中账号的 provider id>`
 - `x-kimi-proxy-affinity: <亲和 key>`（用于调试，能看到这次走的是 header / metadata.user_id / 还是 fingerprint）
+
+> 可在请求头带 `x-set-provider: <provider id>`（默认头名，见 `server.providerHeader`）强制本次只从该 provider 的账号里选，绕过优先级路由；未配置的 provider 返回 400。
 
 ### `GET /accounts` — 实时余量快照
 

@@ -19,6 +19,8 @@ providers:
     model: "mimo-v2.5"                            # 小米 MiMo Token Plan（订阅制）
     # baseUrl 默认 CN 区；海外区(阿姆斯特丹)改成 https://token-plan-ams.xiaomimimo.com/anthropic
     # baseUrl: "https://token-plan-ams.xiaomimimo.com/anthropic"
+  starrysky:
+    model: "glm-5.2"                              # x001.ai 中转;该站仅 glm-5.2 支持 anthropic 端点
 
 accounts:
   - name: "kimi-A"
@@ -38,6 +40,9 @@ accounts:
     # 可选：配账号级 AK/SK（控制台 IAM 密钥管理获取）后，可查方舟实时用量 tiers
     # accessKey: "AKLT..."
     # secretKey: "..."
+  - name: "starrysky-A"
+    provider: "starrysky"
+    apiKey: "sk-xxxxxxxx"
 
 # ── Provider ────────────────────────────────────────────────────
 # provider 的上游地址、配额解析逻辑定义在代码里（src/providers/），model 在上面配置。
@@ -51,6 +56,7 @@ accounts:
 #   host: "0.0.0.0"
 #   port: 8787
 #   affinityHeader: "x-session-id"   # 额外亲和 header；Claude Code 的 x-claude-code-session-id 已内置最高优先级
+#   providerHeader: "x-set-provider"  # 客户端用此 header 显式指定 provider id，强制只从该 provider 的账号里选；未知 provider 返回 400
 #   policy: "affinity-first"          # affinity-first | least-used | round-robin
 #   logLevel: "info"
 #   logFile: "./logs/kimi-proxy.log"  # 开启文件日志；按大小滚动 + 自动清理

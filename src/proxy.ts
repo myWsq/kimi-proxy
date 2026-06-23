@@ -57,23 +57,24 @@ export async function forwardWithFailover(
   parsedBody: Record<string, unknown> | null,
   upstreamPath: string,
   affinityKey: string | null,
+  providerPin: string | null,
   ctx: ForwardContext,
 ): Promise<void> {
   const tried = new Set<string>();
   const failures: string[] = [];
 
   while (true) {
-    const account = router.pick(affinityKey, tried);
+    const account = router.pick(affinityKey, tried, providerPin);
     if (!account) {
       if (!reply.sent && !reply.raw.headersSent) {
+        const exhausted =
+          failures.length === 0
+            ? providerPin
+              ? `no selectable account for provider "${providerPin}"`
+              : "all accounts unhealthy or quota exhausted"
+            : `all candidates failed: ${failures.join("; ")}`;
         reply.code(503).type("application/json").send({
-          error: {
-            type: "no_account_available",
-            message:
-              failures.length === 0
-                ? "all accounts unhealthy or quota exhausted"
-                : `all candidates failed: ${failures.join("; ")}`,
-          },
+          error: { type: "no_account_available", message: exhausted },
         });
       }
       return;
@@ -158,6 +159,7 @@ async function attemptOnce(
       raw.setHeader(k, v as string | string[]);
     }
     raw.setHeader("x-kimi-proxy-account", account.name);
+    raw.setHeader("x-kimi-proxy-provider", account.provider.id);
     if (affinityKey) raw.setHeader("x-kimi-proxy-affinity", affinityKey);
 
     // 2xx 视为成功调用：清掉历史冷却（账号确认可用）

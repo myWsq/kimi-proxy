@@ -11,6 +11,8 @@ export interface ForwardRouteOptions {
   router: Router;
   proxyToken: string;
   affinityHeader: string;
+  // 客户端用此 header 显式指定 provider id，强制只从该 provider 的账号里选。
+  providerHeader: string;
   forwardCtx: ForwardContext;
   logger: Logger;
   // 可选的请求快照日志：每个请求整条落盘一份(method/url/headers/body)
@@ -51,6 +53,20 @@ export function registerForwardRoute(
         "incoming_request",
       );
 
+      // 显式指定 provider（可选）：header 命中且 provider 已配置才生效；
+      // 指定了未知/未配置的 provider 直接 400，避免静默忽略后路由到非预期 provider。
+      const providerPin = readHeader(req, opts.providerHeader.toLowerCase());
+      if (providerPin && !opts.pool.providerIds().has(providerPin)) {
+        const available = [...opts.pool.providerIds()].sort().join(", ");
+        reply.code(400).send({
+          error: {
+            type: "invalid_provider",
+            message: `unknown provider "${providerPin}"; available: ${available}`,
+          },
+        });
+        return;
+      }
+
       const affinityKey = resolveAffinityKey(req, parsedBody, opts.affinityHeader);
 
       // 请求快照：把每个请求整条落盘一份(method/url/headers/body)，与 logLevel 无关。
@@ -71,7 +87,7 @@ export function registerForwardRoute(
       const upstreamPath = req.url.replace(/^\/anthropic/, "") || "/";
 
       opts.logger.debug(
-        { affinityKey, upstreamPath, method: req.method },
+        { affinityKey, upstreamPath, method: req.method, providerPin },
         "forward_start",
       );
 
@@ -83,6 +99,7 @@ export function registerForwardRoute(
         parsedBody,
         upstreamPath,
         affinityKey,
+        providerPin,
         opts.forwardCtx,
       );
     },
