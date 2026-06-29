@@ -1,6 +1,7 @@
 import { ark } from "./ark.js";
 import { glm } from "./glm.js";
 import { kimi } from "./kimi.js";
+import { litellm } from "./litellm.js";
 import { mimo } from "./mimo.js";
 import { starrysky } from "./starrysky.js";
 import type { ProviderDef } from "./types.js";
@@ -14,6 +15,7 @@ export const PROVIDERS: Record<string, ProviderDef> = {
   [ark.id]: ark,
   [mimo.id]: mimo,
   [starrysky.id]: starrysky,
+  [litellm.id]: litellm,
 };
 
 /** 默认 provider:不带 provider 字段的 account 归入此项(向后兼容旧 config)。 */

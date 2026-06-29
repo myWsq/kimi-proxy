@@ -62,10 +62,52 @@ claude
 | `kimi` | Kimi For Coding，含 `/v1/usages` 余量解析（5 小时窗口 + 周限额 + 终身配额） |
 | `glm` | 智谱 GLM（Anthropic 兼容），暂无 usage 接口：账号默认可用，仅靠运行时 429/5xx 冷却 |
 | `ark` | 火山引擎方舟 Coding Plan（Anthropic 兼容，`/api/coding`）。配账号级 AK/SK 后可查实时用量（session/weekly/monthly），否则仅靠运行时冷却 |
+| `mimo` | 小米 MiMo Token Plan（Anthropic 兼容，订阅制），仅靠运行时冷却 |
+| `starrysky` | x001.ai 中转（Anthropic 兼容），仅靠运行时冷却 |
+| `litellm` | **OpenAI-only 上游的统一入口**，经本机 LiteLLM sidecar 转协议（见下「OpenAI 协议上游」）。仅靠运行时冷却 |
 
 每个 provider 在配置里固定一个 **model**（见下「固定 model」）。
 
-**新增 provider**：在 `src/providers/` 写一个模块（`id` + `baseUrl` + 可选 `quota.parse`），在 `src/providers/index.ts` 注册，再在配置的 `providers` 块里给它配 `model` 即可，无需改配置 schema 或路由逻辑。要求该上游原生兼容 Anthropic Messages 协议（透明转发）。
+**新增 provider**：在 `src/providers/` 写一个模块（`id` + `baseUrl` + 可选 `quota.parse`），在 `src/providers/index.ts` 注册，再在配置的 `providers` 块里给它配 `model` 即可，无需改配置 schema 或路由逻辑。要求该上游**原生兼容 Anthropic Messages 协议**（本代理只做透明字节转发，不翻译协议）。只会 OpenAI 协议的上游走下面的 `litellm` sidecar。
+
+### OpenAI 协议上游（LiteLLM 转协议 sidecar）
+
+本代理对上游是**字节透传**，不内置协议翻译。只支持 OpenAI `chat/completions` 的上游，通过本仓库内维护的 [LiteLLM](https://docs.litellm.ai/) sidecar 接入：
+
+```
+Claude Code ──Anthropic──▶ kimi-proxy ──Anthropic(透传)──▶ LiteLLM ──OpenAI──▶ 后端
+                                       ◀────── Anthropic SSE(翻译回来) ──────┘
+```
+
+LiteLLM 暴露 Anthropic Messages 端点（`/v1/messages`），把请求转成 OpenAI 协议打到真正的后端，再把响应**翻译回 Anthropic SSE**。因此对 kimi-proxy 而言 `litellm` 就是又一个 Anthropic 兼容上游——故障转移、会话亲和、429/5xx 冷却、token 统计全部照常工作。
+
+LiteLLM 作为受管组件维护在 `litellm/` 目录，随 PM2 与 kimi-proxy 一起拉起：
+
+```bash
+# 1) 装到项目内 venv（版本钉在 litellm/requirements.txt）
+./litellm/setup.sh
+
+# 2) 配置 + 密钥：复制模板后直接内联填 model_list / api_key / master_key
+#    （litellm/config.yaml 含密钥，已被 .gitignore 忽略，不入库）
+cp litellm/config.example.yaml litellm/config.yaml && $EDITOR litellm/config.yaml
+
+# 3) 起服务（同时拉起 kimi-proxy 与 litellm）
+pm2 start ecosystem.config.cjs
+```
+
+kimi-proxy 侧只需在 `config.yaml` 配一个 `litellm` provider 与账号：
+
+```yaml
+providers:
+  litellm:
+    model: "deepseek-v4-flash"      # = litellm/config.yaml 里的 model_name
+accounts:
+  - name: "litellm-A"
+    provider: "litellm"
+    apiKey: "sk-litellm-change-me"  # = litellm/config.yaml 里的 general_settings.master_key
+```
+
+要把多个 OpenAI 后端各自作为独立路由/优先级单元，在 `src/providers/` 复制 `litellm.ts` 改 `id` 注册多个（如 `litellm-deepseek`），`baseUrl` 同指本 LiteLLM，`model` 各配各的。升级 LiteLLM：改 `litellm/requirements.txt` 版本 → 重跑 `./litellm/setup.sh` → `pm2 restart litellm`。
 
 ### 固定 model
 

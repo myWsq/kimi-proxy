@@ -1,0 +1,31 @@
+# LiteLLM proxy 配置 —— 纯无状态协议翻译器,不持有任何密钥,纳入 git 维护。
+#
+# 作用:暴露 Anthropic Messages 端点(/v1/messages),把请求转成 OpenAI
+# chat/completions 打到真正的后端,再把响应翻译回 Anthropic SSE。
+#
+# 密钥不在这里:每个上游 key 是 kimi-proxy 里的一个独立账号,转发时由 kimi-proxy
+# 注入到请求体的 api_key 字段(provider.injectKeyInBody),LiteLLM 通过
+# configurable_clientside_auth_params 用这个透传的 key 去打真正的上游。
+# 加一个 JD/OpenAI key = 只在 kimi-proxy config.yaml 加账号,本文件无需改动。
+
+model_list:
+  # model_name = kimi-proxy 里 providers.litellm.model;只声明"协议+真实模型+地址",不含 key。
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: openai/DeepSeek-V4-Flash      # openai/ 前缀=走 OpenAI 协议;斜杠后是发给上游的真实 model
+      api_base: https://agentrs.jd.com/api/saas/openai-u/v1
+      # 允许 kimi-proxy 在 body 里透传 api_key,作为打上游的真实 key。
+      configurable_clientside_auth_params: ["api_key"]
+
+litellm_settings:
+  # 关键:/v1/messages 接 openai provider 默认走 OpenAI Responses API(/responses,
+  # 用 input/max_output_tokens),JD 这类网关只有 /chat/completions 会 400。
+  # 置 true 强制走 chat/completions(见 litellm 的 _should_route_to_responses_api)。
+  use_chat_completions_url_for_anthropic_messages: true
+  # 上游不认的参数自动丢弃,避免 Anthropic→OpenAI 转换时因多余字段 400。
+  drop_params: true
+
+general_settings:
+  # 允许客户端(kimi-proxy)在请求体里带 api_key 透传给上游。
+  # LiteLLM 仅监听 127.0.0.1,且只被本机 kimi-proxy 调用,无需再设 master_key。
+  allow_client_side_credentials: true

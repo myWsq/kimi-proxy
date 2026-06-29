@@ -21,6 +21,12 @@ providers:
     # baseUrl: "https://token-plan-ams.xiaomimimo.com/anthropic"
   starrysky:
     model: "glm-5.2"                              # x001.ai 中转;该站仅 glm-5.2 支持 anthropic 端点
+  litellm:
+    # OpenAI-only 上游经本机 LiteLLM proxy 转协议(详见 src/providers/litellm.ts 与 litellm/)。
+    # model 必须等于 litellm/config.yaml 里的 model_name。
+    model: "deepseek-v4-flash"
+    # baseUrl 默认 http://127.0.0.1:4000;LiteLLM 不在本机/换端口时覆盖:
+    # baseUrl: "http://127.0.0.1:4000"
 
 accounts:
   - name: "kimi-A"
@@ -43,6 +49,9 @@ accounts:
   - name: "starrysky-A"
     provider: "starrysky"
     apiKey: "sk-xxxxxxxx"
+  - name: "litellm-A"
+    provider: "litellm"
+    apiKey: "sk-litellm-change-me"     # = litellm/config.yaml 里的 general_settings.master_key
 
 # ── Provider ────────────────────────────────────────────────────
 # provider 的上游地址、配额解析逻辑定义在代码里（src/providers/），model 在上面配置。

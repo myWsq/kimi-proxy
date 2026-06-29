@@ -10,6 +10,11 @@ config.local.yaml
 .env.*
 !.env.example
 
+# LiteLLM sidecar:venv 不入库;config.yaml 已无密钥(密钥在 kimi-proxy 账号里),
+# 故覆盖上面的通配规则重新纳入 git。
+litellm/.venv/
+!litellm/config.yaml
+
 .DS_Store
 .idea/
 .vscode/

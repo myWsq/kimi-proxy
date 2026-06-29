@@ -1,0 +1,3 @@
+# LiteLLM 转协议 sidecar 的依赖,版本钉死以保证可复现。
+# 升级:改这里的版本号 → 重跑 litellm/setup.sh → pm2 restart litellm。
+litellm[proxy]==1.90.0

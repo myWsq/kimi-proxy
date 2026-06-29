@@ -30,6 +30,14 @@ export interface ProviderDef {
   /** 默认上游地址;config 的 providers.<id>.baseUrl 可覆盖。 */
   baseUrl: string;
   /**
+   * 转发时把账号的 apiKey 注入请求体的 `api_key` 字段(而非仅 Authorization 头)。
+   * 用于经 LiteLLM 转协议的 OpenAI 上游:LiteLLM 开
+   * `configurable_clientside_auth_params: ["api_key"]` 后,会用 body 里的 api_key
+   * 去打真正的上游。这样每个 JD/OpenAI key 就是 kimi-proxy 里一个独立账号,
+   * LiteLLM 不持有任何密钥(纯无状态翻译器)。默认 false。
+   */
+  injectKeyInBody?: boolean;
+  /**
    * 配额查询。省略表示该 provider 没有 usage 接口:poller 跳过轮询,账号默认
    * healthy/selectable,仅靠运行时 429/5xx 冷却。两种模式:
    * - 简单模式:{ path, parse } —— Bearer apiKey GET baseUrl+path,再 parse(kimi)

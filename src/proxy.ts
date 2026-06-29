@@ -106,8 +106,16 @@ async function attemptOnce(
   const headers = buildUpstreamHeaders(req.headers, account.apiKey);
   // 强制把请求体里的 model 覆盖成该账号 provider 固定的 model。
   // 按账号在每次 attempt 重写:故障转移跨 provider 时 model 随之切换。
+  // injectKeyInBody 的 provider(经 LiteLLM 转协议):同时把账号 apiKey 注入 body.api_key,
+  // 由 LiteLLM 的 clientside-auth 透传给真正上游——每个 key 即一个独立账号。
   const outgoingBody = parsedBody
-    ? Buffer.from(JSON.stringify({ ...parsedBody, model: account.model }))
+    ? Buffer.from(
+        JSON.stringify(
+          account.provider.injectKeyInBody
+            ? { ...parsedBody, model: account.model, api_key: account.apiKey }
+            : { ...parsedBody, model: account.model },
+        ),
+      )
     : body;
 
   account.inflight++;
@@ -205,6 +213,10 @@ function buildUpstreamHeaders(
     out[k] = Array.isArray(v) ? v.join(", ") : String(v);
   }
   out["authorization"] = `Bearer ${apiKey}`;
+  // 同时下发 x-api-key=apiKey：① LiteLLM 的 /v1/messages 认这个头而非 Bearer；
+  // ② 客户端带来的 x-api-key（往往是本代理的 proxyToken）若不覆盖会泄漏给上游导致 401。
+  // 对原生 Anthropic 上游(kimi/glm/mimo…)多带一个同值头无害，它们走 Bearer。
+  out["x-api-key"] = apiKey;
   // 强制 identity：我们需要扫 SSE/JSON 文本里的 usage 字段，
   // 拿到压缩字节就没法解析了；undici request() 默认不自动解压
   out["accept-encoding"] = "identity";
